@@ -30,6 +30,8 @@ pipeline {
         stage('cart-cna-microservice') {
           steps {
             dir('cart-cna-microservice') {
+              // FIX 1: Ensure gradlew is executable before running it
+              sh 'chmod +x gradlew'
               sh './gradlew clean test build'
             }
           }
@@ -38,7 +40,8 @@ pipeline {
           steps {
             dir('products-cna-microservice') {
               sh 'npm ci'
-              sh 'npm test'
+              // NOTE: FIX 3 is required externally (update package.json test script)
+              sh 'npm test' 
               sh 'npm run build'
             }
           }
@@ -46,8 +49,13 @@ pipeline {
         stage('users-cna-microservice') {
           steps {
             dir('users-cna-microservice') {
-              sh 'pip install -r requirements.txt'
-              sh 'pytest'
+              // FIX 2: Use Python Virtual Environment (venv) to avoid externally-managed error (PEP 668)
+              sh '''
+                python3 -m venv venv
+                source venv/bin/activate
+                pip install -r requirements.txt
+                pytest
+              '''
             }
           }
         }
@@ -142,10 +150,7 @@ pipeline {
             git checkout ${GITOPS_BRANCH}
           '''
 
-          // --- FIX APPLIED HERE ---
-          // The '$' at the end of the sed pattern (.*$) is a regex character 
-          // that Groovy was trying to interpret as a variable.
-          // It must be escaped as '\$' to pass through to the shell correctly.
+          // FIX (from previous issue): Escaping the sed regex '$'
           sh """
             sed -i 's|image: .*\$|image: ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}|' gitops/cart-cna-microservice/deployment.yaml
             sed -i 's|image: .*\$|image: ${ECR_REGISTRY}/products-cna-microservice:${IMAGE_TAG}|' gitops/products-cna-microservice/deployment.yaml
@@ -167,6 +172,10 @@ pipeline {
   }
 
   post {
+    always {
+        // Best practice: Clean the workspace after the build finishes (success or failure)
+        cleanWs()
+    }
     success {
       echo "✅ CI pipeline complete: images built, scanned, pushed, and GitOps manifests updated."
       emailext(
