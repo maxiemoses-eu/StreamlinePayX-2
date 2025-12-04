@@ -24,7 +24,7 @@ pipeline {
     }
 
     stage('Build & Test') {
-      parallel failFast: true, stages: {
+      parallel {
         stage('cart-cna-microservice') {
           steps {
             dir('cart-cna-microservice') {
@@ -72,7 +72,7 @@ pipeline {
     }
 
     stage('Docker Build & Scan') {
-      parallel failFast: true, stages: {
+      parallel {
         stage('cart-cna-microservice') {
           steps {
             dir('cart-cna-microservice') {
@@ -116,19 +116,15 @@ pipeline {
             echo "Authenticating with ECR..."
             aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-            echo "Tagging and pushing cart-cna-microservice..."
             docker tag cart-cna-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}
             docker push ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}
 
-            echo "Tagging and pushing products-cna-microservice..."
             docker tag products-cna-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/products-cna-microservice:${IMAGE_TAG}
             docker push ${ECR_REGISTRY}/products-cna-microservice:${IMAGE_TAG}
 
-            echo "Tagging and pushing users-cna-microservice..."
             docker tag users-cna-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/users-cna-microservice:${IMAGE_TAG}
             docker push ${ECR_REGISTRY}/users-cna-microservice:${IMAGE_TAG}
 
-            echo "Tagging and pushing store-ui..."
             docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
             docker push ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
           """
