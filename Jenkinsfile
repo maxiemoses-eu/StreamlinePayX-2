@@ -8,7 +8,7 @@ pipeline {
     GITOPS_REPO       = 'git@github.com:maxiemoses-eu/agrocd-yaml.git'
     GITOPS_BRANCH     = 'main'
     GITOPS_CREDENTIAL = 'gitops-ssh-key'
-    AWS_CREDENTIAL_ID = 'aws-credentials-id'
+    AWS_CREDENTIAL_ID = 'ws-credentials-id'
   }
 
   options {
@@ -66,32 +66,32 @@ pipeline {
         stage('cart-cna-microservice') {
           steps {
             dir('cart-cna-microservice') {
-              sh "docker build -t cart-cna-microservice:${IMAGE_TAG} ."
-              sh "trivy image --severity HIGH,CRITICAL cart-cna-microservice:${IMAGE_TAG}"
+              sh "docker build -t cart-cna-microservice:\${IMAGE_TAG} ."
+              sh "trivy image --severity HIGH,CRITICAL cart-cna-microservice:\${IMAGE_TAG}"
             }
           }
         }
         stage('products-cna-microservice') {
           steps {
             dir('products-cna-microservice') {
-              sh "docker build -t products-cna-microservice:${IMAGE_TAG} ."
-              sh "trivy image --severity HIGH,CRITICAL products-cna-microservice:${IMAGE_TAG}"
+              sh "docker build -t products-cna-microservice:\${IMAGE_TAG} ."
+              sh "trivy image --severity HIGH,CRITICAL products-cna-microservice:\${IMAGE_TAG}"
             }
           }
         }
         stage('users-cna-microservice') {
           steps {
             dir('users-cna-microservice') {
-              sh "docker build -t users-cna-microservice:${IMAGE_TAG} ."
-              sh "trivy image --severity HIGH,CRITICAL users-cna-microservice:${IMAGE_TAG}"
+              sh "docker build -t users-cna-microservice:\${IMAGE_TAG} ."
+              sh "trivy image --severity HIGH,CRITICAL users-cna-microservice:\${IMAGE_TAG}"
             }
           }
         }
         stage('store-ui') {
           steps {
             dir('store-ui') {
-              sh "docker build -t store-ui:${IMAGE_TAG} ."
-              sh "trivy image --severity HIGH,CRITICAL store-ui:${IMAGE_TAG}"
+              sh "docker build -t store-ui:\${IMAGE_TAG} ."
+              sh "trivy image --severity HIGH,CRITICAL store-ui:\${IMAGE_TAG}"
             }
           }
         }
@@ -100,27 +100,27 @@ pipeline {
 
     stage('Push to ECR') {
       steps {
-        echo "Logging in to AWS ECR using withAWS credentials block..."
+        echo "🔐 Logging in to AWS ECR using withAWS credentials block..."
         withAWS(credentials: "${AWS_CREDENTIAL_ID}", region: "${AWS_REGION}") {
           sh """
             echo "Authenticating with ECR..."
-            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+            aws ecr get-login-password --region \${AWS_REGION} | docker login --username AWS --password-stdin \${ECR_REGISTRY}
 
             echo "Tagging and pushing cart-cna-microservice..."
-            docker tag cart-cna-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}
-            docker push ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}
+            docker tag cart-cna-microservice:\${IMAGE_TAG} \${ECR_REGISTRY}/cart-cna-microservice:\${IMAGE_TAG}
+            docker push \${ECR_REGISTRY}/cart-cna-microservice:\${IMAGE_TAG}
 
             echo "Tagging and pushing products-cna-microservice..."
-            docker tag products-cna-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/products-cna-microservice:${IMAGE_TAG}
-            docker push ${ECR_REGISTRY}/products-cna-microservice:${IMAGE_TAG}
+            docker tag products-cna-microservice:\${IMAGE_TAG} \${ECR_REGISTRY}/products-cna-microservice:\${IMAGE_TAG}
+            docker push \${ECR_REGISTRY}/products-cna-microservice:\${IMAGE_TAG}
 
             echo "Tagging and pushing users-cna-microservice..."
-            docker tag users-cna-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/users-cna-microservice:${IMAGE_TAG}
-            docker push ${ECR_REGISTRY}/users-cna-microservice:${IMAGE_TAG}
+            docker tag users-cna-microservice:\${IMAGE_TAG} \${ECR_REGISTRY}/users-cna-microservice:\${IMAGE_TAG}
+            docker push \${ECR_REGISTRY}/users-cna-microservice:\${IMAGE_TAG}
 
             echo "Tagging and pushing store-ui..."
-            docker tag store-ui:${IMAGE_TAG} ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
-            docker push ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}
+            docker tag store-ui:\${IMAGE_TAG} \${ECR_REGISTRY}/store-ui:\${IMAGE_TAG}
+            docker push \${ECR_REGISTRY}/store-ui:\${IMAGE_TAG}
           """
         }
       }
@@ -136,10 +136,10 @@ pipeline {
           '''
 
           sh """
-            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}|' gitops/cart-cna-microservice/deployment.yaml
-            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/products-cna-microservice:${IMAGE_TAG}|' gitops/products-cna-microservice/deployment.yaml
-            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/users-cna-microservice:${IMAGE_TAG}|' gitops/users-cna-microservice/deployment.yaml
-            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}|' gitops/store-ui/deployment.yaml
+            sed -i 's|image: .*$|image: \${ECR_REGISTRY}/cart-cna-microservice:\${IMAGE_TAG}|' gitops/cart-cna-microservice/deployment.yaml
+            sed -i 's|image: .*$|image: \${ECR_REGISTRY}/products-cna-microservice:\${IMAGE_TAG}|' gitops/products-cna-microservice/deployment.yaml
+            sed -i 's|image: .*$|image: \${ECR_REGISTRY}/users-cna-microservice:\${IMAGE_TAG}|' gitops/users-cna-microservice/deployment.yaml
+            sed -i 's|image: .*$|image: \${ECR_REGISTRY}/store-ui:\${IMAGE_TAG}|' gitops/store-ui/deployment.yaml
           """
 
           sh '''
@@ -157,9 +157,21 @@ pipeline {
   post {
     success {
       echo "✅ CI pipeline complete: images built, scanned, pushed, and GitOps manifests updated."
+      emailext(
+        subject: "Jenkins Build SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: """<p>The Jenkins pipeline <b>${env.JOB_NAME}</b> completed <b>successfully</b>.</p>
+                 <p>View it here: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>""",
+        to: 'your.email@example.com'
+      )
     }
     failure {
       echo "❌ CI pipeline failed. Check logs for details."
+      emailext(
+        subject: "Jenkins Build FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: """<p>The Jenkins pipeline <b>${env.JOB_NAME}</b> <b>failed</b>.</p>
+                 <p>Investigate here: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>""",
+        to: 'your.email@example.com'
+      )
     }
   }
 }
