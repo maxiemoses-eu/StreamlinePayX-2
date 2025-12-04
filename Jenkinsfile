@@ -2,8 +2,6 @@ pipeline {
   agent any
 
   environment {
-    // NOTE: Keep AWS_CREDENTIAL_ID here. If the 'withAWS' block fails later, 
-    // it means the AWS Credentials plugin is missing, and we must switch to 'withCredentials'.
     AWS_REGION        = 'us-west-2'
     ECR_REGISTRY      = '1659591640509.dkr.ecr.us-west-2.amazonaws.com'
     IMAGE_TAG         = "${env.BUILD_NUMBER}"
@@ -26,11 +24,10 @@ pipeline {
     }
 
     stage('Build & Test') {
-      parallel {
+      parallel failFast: true, stages: {
         stage('cart-cna-microservice') {
           steps {
             dir('cart-cna-microservice') {
-              // FIX 1: Ensure gradlew is executable before running it
               sh 'chmod +x gradlew'
               sh './gradlew clean test build'
             }
@@ -40,21 +37,24 @@ pipeline {
           steps {
             dir('products-cna-microservice') {
               sh 'npm ci'
-              // NOTE: FIX 3 is required externally (update package.json test script)
-              sh 'npm test' 
+              sh 'npm run lint'
+              sh 'npm run format'
+              sh 'npm test'
               sh 'npm run build'
+            }
+          }
+          post {
+            always {
+              junit 'products-cna-microservice/reports/junit/*.xml'
             }
           }
         }
         stage('users-cna-microservice') {
           steps {
             dir('users-cna-microservice') {
-              // FIX 2: Use Python Virtual Environment (venv) to avoid externally-managed error (PEP 668)
               sh '''
                 python3 -m venv venv
-                source venv/bin/activate
-                pip install -r requirements.txt
-                pytest
+                . venv/bin/activate && pip install -r requirements.txt && pytest
               '''
             }
           }
@@ -62,7 +62,7 @@ pipeline {
         stage('store-ui') {
           steps {
             dir('store-ui') {
-              sh 'npm ci'
+              sh 'npm ci || npm ci'
               sh 'npm test'
               sh 'npm run build'
             }
@@ -72,11 +72,10 @@ pipeline {
     }
 
     stage('Docker Build & Scan') {
-      parallel {
+      parallel failFast: true, stages: {
         stage('cart-cna-microservice') {
           steps {
             dir('cart-cna-microservice') {
-              // Using Groovy interpolation for variables is standard for single-line sh commands
               sh "docker build -t cart-cna-microservice:${IMAGE_TAG} ."
               sh "trivy image --severity HIGH,CRITICAL cart-cna-microservice:${IMAGE_TAG}"
             }
@@ -112,11 +111,9 @@ pipeline {
     stage('Push to ECR') {
       steps {
         echo "🔐 Logging in to AWS ECR using withAWS credentials block..."
-        // Use standard Groovy interpolation for environment variables
         withAWS(credentials: "${AWS_CREDENTIAL_ID}", region: "${AWS_REGION}") {
           sh """
             echo "Authenticating with ECR..."
-            # Variables here are Groovy env vars and do NOT need to be escaped.
             aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
             echo "Tagging and pushing cart-cna-microservice..."
@@ -142,30 +139,25 @@ pipeline {
     stage('GitOps Promotion') {
       steps {
         sshagent([GITOPS_CREDENTIAL]) {
-          // Use single quotes for shell commands where Groovy interpolation is not needed,
-          // which is safer for commands like git/cd.
-          sh '''
+          sh """
             git clone ${GITOPS_REPO} gitops
             cd gitops
             git checkout ${GITOPS_BRANCH}
-          '''
-
-          // FIX (from previous issue): Escaping the sed regex '$'
+          """
           sh """
             sed -i 's|image: .*\$|image: ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}|' gitops/cart-cna-microservice/deployment.yaml
             sed -i 's|image: .*\$|image: ${ECR_REGISTRY}/products-cna-microservice:${IMAGE_TAG}|' gitops/products-cna-microservice/deployment.yaml
             sed -i 's|image: .*\$|image: ${ECR_REGISTRY}/users-cna-microservice:${IMAGE_TAG}|' gitops/users-cna-microservice/deployment.yaml
             sed -i 's|image: .*\$|image: ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}|' gitops/store-ui/deployment.yaml
           """
-
-          sh '''
+          sh """
             cd gitops
             git config user.name "Jenkins CI"
             git config user.email "ci@streamlinepay.com"
             git add .
             git commit -am "Promote ${IMAGE_TAG} to ${GITOPS_BRANCH}"
             git push origin ${GITOPS_BRANCH}
-          '''
+          """
         }
       }
     }
@@ -173,8 +165,7 @@ pipeline {
 
   post {
     always {
-        // Best practice: Clean the workspace after the build finishes (success or failure)
-        cleanWs()
+      cleanWs()
     }
     success {
       echo "✅ CI pipeline complete: images built, scanned, pushed, and GitOps manifests updated."
