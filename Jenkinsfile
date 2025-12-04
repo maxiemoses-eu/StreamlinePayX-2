@@ -32,7 +32,13 @@ pipeline {
               sh './gradlew clean test build'
             }
           }
+          post {
+            always {
+              junit 'cart-cna-microservice/build/test-results/test/*.xml'
+            }
+          }
         }
+
         stage('products-cna-microservice') {
           steps {
             dir('products-cna-microservice') {
@@ -49,20 +55,33 @@ pipeline {
             }
           }
         }
+
         stage('users-cna-microservice') {
           steps {
             dir('users-cna-microservice') {
               sh '''
                 python3 -m venv venv
-                . venv/bin/activate && pip install -r requirements.txt && pytest
+                venv/bin/pip install -r requirements.txt
+                venv/bin/pytest --junitxml=report.xml
               '''
             }
           }
+          post {
+            always {
+              junit 'users-cna-microservice/report.xml'
+            }
+          }
         }
+
         stage('store-ui') {
           steps {
             dir('store-ui') {
-              sh 'npm ci || npm ci'
+              sh '''
+                if ! npm ci; then
+                  echo "Retrying npm ci..."
+                  npm ci
+                fi
+              '''
               sh 'npm test'
               sh 'npm run build'
             }
@@ -110,10 +129,8 @@ pipeline {
 
     stage('Push to ECR') {
       steps {
-        echo "🔐 Logging in to AWS ECR using withAWS credentials block..."
         withAWS(credentials: "${AWS_CREDENTIAL_ID}", region: "${AWS_REGION}") {
           sh """
-            echo "Authenticating with ECR..."
             aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
             docker tag cart-cna-microservice:${IMAGE_TAG} ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}
@@ -139,15 +156,12 @@ pipeline {
             git clone ${GITOPS_REPO} gitops
             cd gitops
             git checkout ${GITOPS_BRANCH}
-          """
-          sh """
-            sed -i 's|image: .*\$|image: ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}|' gitops/cart-cna-microservice/deployment.yaml
-            sed -i 's|image: .*\$|image: ${ECR_REGISTRY}/products-cna-microservice:${IMAGE_TAG}|' gitops/products-cna-microservice/deployment.yaml
-            sed -i 's|image: .*\$|image: ${ECR_REGISTRY}/users-cna-microservice:${IMAGE_TAG}|' gitops/users-cna-microservice/deployment.yaml
-            sed -i 's|image: .*\$|image: ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}|' gitops/store-ui/deployment.yaml
-          """
-          sh """
-            cd gitops
+
+            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}|' cart-cna-microservice/deployment.yaml
+            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/products-cna-microservice:${IMAGE_TAG}|' products-cna-microservice/deployment.yaml
+            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/users-cna-microservice:${IMAGE_TAG}|' users-cna-microservice/deployment.yaml
+            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}|' store-ui/deployment.yaml
+
             git config user.name "Jenkins CI"
             git config user.email "ci@streamlinepay.com"
             git add .
