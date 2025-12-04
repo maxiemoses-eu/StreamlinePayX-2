@@ -152,22 +152,22 @@ pipeline {
     stage('GitOps Promotion') {
       steps {
         sshagent([GITOPS_CREDENTIAL]) {
-          sh """
-            git clone ${GITOPS_REPO} gitops
+          sh '''
+            git clone $GITOPS_REPO gitops
             cd gitops
-            git checkout ${GITOPS_BRANCH}
+            git checkout $GITOPS_BRANCH
 
-            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/cart-cna-microservice:${IMAGE_TAG}|' cart-cna-microservice/deployment.yaml
-            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/products-cna-microservice:${IMAGE_TAG}|' products-cna-microservice/deployment.yaml
-            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/users-cna-microservice:${IMAGE_TAG}|' users-cna-microservice/deployment.yaml
-            sed -i 's|image: .*$|image: ${ECR_REGISTRY}/store-ui:${IMAGE_TAG}|' store-ui/deployment.yaml
+            sed -i "s|image: .*|image: $ECR_REGISTRY/cart-cna-microservice:$IMAGE_TAG|" cart-cna-microservice/deployment.yaml
+            sed -i "s|image: .*|image: $ECR_REGISTRY/products-cna-microservice:$IMAGE_TAG|" products-cna-microservice/deployment.yaml
+            sed -i "s|image: .*|image: $ECR_REGISTRY/users-cna-microservice:$IMAGE_TAG|" users-cna-microservice/deployment.yaml
+            sed -i "s|image: .*|image: $ECR_REGISTRY/store-ui:$IMAGE_TAG|" store-ui/deployment.yaml
 
             git config user.name "Jenkins CI"
             git config user.email "ci@streamlinepay.com"
             git add .
-            git commit -am "Promote ${IMAGE_TAG} to ${GITOPS_BRANCH}"
-            git push origin ${GITOPS_BRANCH}
-          """
+            git commit -am "Promote $IMAGE_TAG to $GITOPS_BRANCH"
+            git push origin $GITOPS_BRANCH
+          '''
         }
       }
     }
