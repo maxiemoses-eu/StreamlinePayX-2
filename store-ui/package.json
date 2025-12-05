@@ -5,8 +5,9 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "test": "react-scripts test --passWithNoTests",
+    "eject": "react-scripts eject",
+    "format": "prettier --single-quote --check ."
   },
   "dependencies": {
     "@emotion/react": "^11.9.3",
