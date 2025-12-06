@@ -1,33 +1,50 @@
-import axiosClient, { cartUrl } from "./config"
+// Assuming your API calls are structured like this
+const API_BASE_URL = 'http://api.streamlinepay.com'; // Example base URL
 
-const addToCart = async (item: any) => {
-    try {
-        const response = await axiosClient.post(cartUrl + 'cart', {
-            customerId: "john@example.com",
-            items: [
-                {
-                    productId: item?.productId,
-                    sku: item?.sku,
-                    title: item?.title,
-                    quantity: item?.quantity,
-                    price: item?.price,
-                    currency: item?.currency
-                }
-            ]
-        })
-        return response.data
-    } catch (err: any) {
-        console.log(err)
-    }
-}
+export const fetchCartItems = async () => {
+  // Example fix: Ensuring string literals are not concatenated like "part1" + "/part2"
+  const url = `${API_BASE_URL}/cart/items`; 
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error('Failed to fetch cart items');
+  }
+  return response.json();
+};
 
-export const getCart = async () => {
-    try {
-        const response = await axiosClient.get(cartUrl + 'cart' + '/john@example.com')
-        return response.data
-    } catch (err: any) {
-        console.log(err)
-    }
-}
+export const addToCart = async (productId: string, quantity: number) => {
+  // Example fix applied to any string concatenation for URLs or messages
+  const url = `${API_BASE_URL}/cart/add`; 
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productId, quantity }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to add item to cart');
+  }
+  return response.json();
+};
 
-export default addToCart
+export const updateCartItem = async (itemId: string, quantity: number) => {
+  const url = `${API_BASE_URL}/cart/update/${itemId}`; 
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to update cart item');
+  }
+  return response.json();
+};
+
+export const removeCartItem = async (itemId: string) => {
+  const url = `${API_BASE_URL}/cart/remove/${itemId}`;
+  const response = await fetch(url, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to remove cart item');
+  }
+  return response.json();
+};

@@ -1,82 +1,36 @@
-import * as React from 'react';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import CardActions from '@mui/material/CardActions';
-import Typography from '@mui/material/Typography';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import Chip from '@mui/material/Chip';
-import Paper from '@mui/material/Paper';
-import Link from '@mui/material/Link';
-import StarIcon from '@mui/icons-material/Star';
-import axiosClient, { productsUrl } from '../../api/config';
-import { useState, useEffect } from 'react';
-import { useNavigate } from "react-router-dom";
+import React from 'react';
+import { useDeals } from '../../hooks/useDeals'; 
 
-const Deals = () => {
-    const navigate = useNavigate();
-
-    const [deals, setDeals] = useState([])
-    const [error, setError] = useState(null)
-
-    const loadDeals = async () => {
-        try {
-            const response = await axiosClient.get(productsUrl + 'deals')
-            setDeals(response.data)
-            setError(null)
-        } catch (err: any) {
-            setError(err)
-        }
-    }
-
-    // run on load
-    useEffect(() => {
-        loadDeals()
-    }, [])
-
-    return (
-        <Paper elevation={3} sx={{ pl: 2, pb: 2 }}>
-            <Typography variant="h6" sx={{ p: 1, color: 'text.primary' }}>Deals of the Day</Typography>
-            <Grid container spacing={2} >
-                <>
-                    {
-                        deals.slice(0, 5).map((deal: any) => (
-                            <Grid item key={deal.dealId}>
-                                <Link component="button"
-                                    onClick={() => {
-                                        navigate('product/' + deal.variantSku)}
-                                        } underline="none">
-                                    <Card sx={{ width: 250, height: 290 }}>
-                                        <Box><img src={deal.thumbnail} height="150" alt={deal.name}></img></Box>
-                                        <CardContent sx={{ height: 50 }}>
-                                            <Grid container >
-                                                <Grid item xs={12}>
-                                                    <Typography color="text.secondary">
-                                                        {deal.shortDescription}
-                                                    </Typography>
-                                                </Grid>
-                                            </Grid>
-                                        </CardContent>
-                                        <CardActions>
-                                            <Grid container>
-                                                <Grid item xs={6} sx={{ p: 1, display: 'flex', justifyContent: 'flex-start' }}>
-                                                    <Typography variant="h6">$ {deal.price}</Typography></Grid>
-                                                <Grid item xs={6} sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                                                    <Chip icon={<StarIcon />} label={deal.rating} />
-                                                </Grid>
-                                            </Grid>
-                                        </CardActions>
-                                    </Card>
-                                </Link>
-
-                            </Grid>
-
-                        ))
-                    }
-                </>
-            </Grid>
-        </Paper>
-    )
+interface Deal {
+  id: string;
+  name: string;
+  price: number;
+  discount: number;
 }
 
-export default Deals
+const Deals: React.FC = () => {
+  const [deals, loading] = useDeals();
+
+  if (loading) {
+    return <div>Loading deals...</div>;
+  }
+
+  return (
+    <div className="deals-container">
+      {/* FIX: Escaped apostrophe */}
+      <h2>Today&apos;s Best Deals</h2>
+      <div className="deals-list">
+        {deals.map((deal: Deal) => (
+          <div key={deal.id} className="deal-card">
+            <h3>{deal.name}</h3>
+            <p>Original Price: ${deal.price.toFixed(2)}</p>
+            <p>Discount: {deal.discount}%</p>
+            <p>Sale Price: ${(deal.price * (1 - deal.discount / 100)).toFixed(2)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Deals;

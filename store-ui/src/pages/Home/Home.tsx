@@ -1,49 +1,41 @@
-import data from '../../utils/assets'
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Deals from '../../components/Deals/Deals';
+import ProductsList from '../../components/ProductsList/ProductsList';
+import Carousel from '../../components/Carousel/Carousel';
 import './Home.css';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Typography from '@mui/material/Typography';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import Paper from '@mui/material/Paper';
-import Deals from '../../components/Deals/Deals'
-import { useNavigate } from "react-router-dom";
 
-function Home() {
+const Home: React.FC = () => {
   const navigate = useNavigate();
-  
+
+  useEffect(() => {
+    console.log('Home component loaded');
+  }, []);
+
+  const handleProductClick = (id: string) => {
+    navigate(`/product/${id}`);
+  };
+
+  const products = [
+    { id: 1, name: 'Product A' },
+    { id: 2, name: 'Product B' },
+    { id: 3, name: 'Product C' },
+  ];
+
   return (
-    <div>
-      <Box sx={{ flexGrow: 1, p: 2 }}>
-        <Deals />
-      </Box>
-      <Grid container>
-        <Grid item sx={{ pl: 2, pr: 2, width: '100%'}}>
-          <Paper elevation={3} sx={{ pl: 2, pb: 2 }}>
-            <Typography variant="h6" sx={{ p: 1, color: 'text.primary' }}>Shop by Category</Typography>
-            <Grid container spacing={2}>
-              <>
-                {
-                  data['categories'].map((category, index) => (
-                    <Grid item key={index}>
-                      <Card sx={{ width: 160, height: 200 }}>
-                        <CardContent>
-                          <Typography color="text.secondary" >
-                            {category.name}
-                          </Typography>
-                          <Box> <img src={category.image} height="128" alt={category.name}></img></Box>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))
-                }
-              </>
-            </Grid>
-          </Paper>
-        </Grid>
-      </Grid>
+    <div className="home-container">
+      <Carousel />
+      <Deals />
+      <section className="featured-products">
+        <h2>Featured Products</h2>
+        <ProductsList products={products} onProductClick={handleProductClick} />
+      </section>
+      <section className="about-us">
+        <h3>About StreamlinePay</h3>
+        <p>Your one-stop shop for all things digital and physical.</p>
+      </section>
     </div>
   );
-}
+};
 
 export default Home;

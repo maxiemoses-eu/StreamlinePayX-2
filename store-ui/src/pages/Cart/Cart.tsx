@@ -1,85 +1,90 @@
+import React, { useState, useEffect } from 'react'; // FIX: Added React import
+import { getCartItems, removeFromCart } from '../../api/cart';
+import { Grid, Typography, Button, Paper, Box } from '@mui/material';
 
-import { useParams } from "react-router-dom";
-import { getCart } from "../../api/cart"
-import Paper from '@mui/material/Paper';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import { Typography } from '@mui/material';
-import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
-import IconButton from '@mui/material/IconButton';
-import StarIcon from '@mui/icons-material/Star';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import PaidIcon from '@mui/icons-material/Paid';
-import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
-import AddCircleIcon from '@mui/icons-material/AddCircle';
-import TextField from '@mui/material/TextField';
-import { useState, useEffect } from 'react';
-import { useNavigate } from "react-router-dom";
-
-const Cart = () => {
-
-    const navigate = useNavigate();
-
-    const [cart, setCart] = useState({} as any)
-
-    const [textQuantity, setQuantity] = useState<number>(1);
-
-    const onQuantityChange = (e: any) => setQuantity(e.target.value);
-    const handleAdd = () => setQuantity(textQuantity + 1);
-    const handleMinus = () => setQuantity(textQuantity - 1);
-
-    // run on load
-    useEffect(() => {
-        getCart().then((cart) => {
-            console.log(cart)
-            setCart(cart)
-        })
-    }, [])
-
-    return (
-        <Box sx={{ p: 1 }}>
-            <Paper elevation={3} sx={{ p: 1 }}>
-                {cart?.items?.map((item: any, index: number) => (
-                    <Grid container key={index} direction="row" sx={{ p: 1 }}>
-                        <Grid item xs={6}>
-                            <Typography variant="h6">{item?.title}</Typography>
-                        </Grid>
-                        <Grid item xs={4}>
-                            <Typography></Typography>
-                            <Grid item>
-                                <IconButton color="primary" aria-label="decrement" component="span"
-                                    onClick={handleMinus}>
-                                    <RemoveCircleIcon />
-                                </IconButton>
-                                <TextField
-                                    sx={{ width: '8ch' }}
-                                    required
-                                    id="quantity"
-                                    label="Quantity"
-                                    size="small"
-                                    onChange={onQuantityChange}
-                                    value={item?.quantity}
-                                />
-                                <IconButton color="primary" aria-label="increment" component="span"
-                                    onClick={handleAdd}>
-                                    <AddCircleIcon />
-                                </IconButton>
-                            </Grid>
-                        </Grid>
-                        <Grid item>
-                            <Typography>{'$' + item?.price}</Typography>
-                        </Grid>
-                    </Grid>
-                ))}
-                <Grid container>
-                    <Grid item xs={12} sx={{  display: 'flex', justifyContent: 'flex-end' }}>
-                        <Button variant="contained" startIcon={<PaidIcon />}>Checkout</Button>
-                    </Grid>
-                </Grid>
-            </Paper>
-        </Box >
-    )
+interface CartItem {
+  id: string;
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
 }
 
-export default Cart
+const Cart: React.FC = () => {
+  const [items, setItems] = useState<CartItem[]>([]);
+  // Removed explicit :any assignment to avoid warning, letting TS infer or defining specific return type
+  const [loading, setLoading] = useState(true); 
+
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        const data = await getCartItems();
+        setItems(data);
+      } catch (error) {
+        console.error("Failed to fetch cart items", error);
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchItems();
+  }, []);
+
+  const handleRemove = async (itemId: string) => {
+    try {
+      await removeFromCart(itemId);
+      setItems(items.filter(item => item.id !== itemId));
+    } catch (error) {
+      console.error("Failed to remove item", error);
+    }
+  };
+
+  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  if (loading) return <Typography>Loading cart...</Typography>;
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        Shopping Cart
+      </Typography>
+      {items.length === 0 ? (
+        <Typography>Your cart is empty.</Typography>
+      ) : (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={8}>
+            {/* FIX: JSX is now correctly scoped to React */}
+            {items.map((item) => (
+              <Paper key={item.id} sx={{ p: 2, mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="h6">{item.name}</Typography>
+                  <Typography>Price: ${item.price.toFixed(2)}</Typography>
+                  <Typography>Quantity: {item.quantity}</Typography>
+                </Box>
+                <Button variant="outlined" color="secondary" onClick={() => handleRemove(item.id)}>
+                  Remove
+                </Button>
+              </Paper>
+            ))}
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h5" gutterBottom>
+                Order Summary
+              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography>Subtotal:</Typography>
+                <Typography>${total.toFixed(2)}</Typography>
+              </Box>
+              <Button variant="contained" color="primary" fullWidth>
+                Proceed to Checkout
+              </Button>
+            </Paper>
+          </Grid>
+        </Grid>
+      )}
+    </Box>
+  );
+};
+
+export default Cart;

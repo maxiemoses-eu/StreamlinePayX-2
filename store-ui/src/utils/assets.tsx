@@ -1,4 +1,4 @@
-let data = {
+const data = {
     'categories': [
         {
             'name': 'Top Offers',
