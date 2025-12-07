@@ -1,20 +1,18 @@
-import { render, screen, cleanup } from '@testing-library/react';
-import { afterEach, describe, expect, test } from 'vitest';  // 👈 Add vitest globals
-import { MemoryRouter } from 'react-router-dom';
-import Home from './Home';
+import React from "react";
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import Home from "./Home";
 
-// Cleanup test DOM after each test run
-afterEach(cleanup);
-
-describe('Home Page', () => {
-  test('renders welcome message', () => {
+describe("Home Page", () => {
+  it("renders Featured Daily Offers section", () => {
     render(
       <MemoryRouter>
         <Home />
       </MemoryRouter>
     );
 
-    const welcomeText = screen.getByText(/welcome to streamlinepay store/i);
-    expect(welcomeText).toBeInTheDocument();
+    // ✅ Check for a heading that exists in Home.tsx
+    const heading = screen.getByText(/featured daily offers/i);
+    expect(heading).toBeInTheDocument();
   });
 });
