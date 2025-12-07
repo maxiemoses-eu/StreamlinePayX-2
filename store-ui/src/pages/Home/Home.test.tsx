@@ -1,11 +1,17 @@
-import React from 'react'; // FIX: Added React import
-import { render, screen } from '@testing-library/react';
+import React from 'react';
+import { render, screen, cleanup } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import '@testing-library/jest-dom';
 import Home from './Home';
 
-// Assuming you have mock handlers for useNavigate and other hooks here
+afterEach(cleanup);
 
 test('renders welcome message', () => {
-  render(<Home />);
+  render(
+    <MemoryRouter>
+      <Home />
+    </MemoryRouter>
+  );
   const linkElement = screen.getByText(/Welcome to StreamlinePay Store/i);
   expect(linkElement).toBeInTheDocument();
 });

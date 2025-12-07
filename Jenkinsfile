@@ -1,75 +1,60 @@
 pipeline {
-    agent any
+  agent any
 
-    stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
+  environment {
+    NODE_ENV = 'production'
+  }
 
-        stage('Clean Workspace') {
-            steps {
-                dir('store-ui') {
-                    sh '''
-                        echo "🧹 Cleaning workspace..."
-                        rm -rf node_modules package-lock.json
-                    '''
-                }
-            }
-        }
-
-        stage('Install Dependencies') {
-            steps {
-                dir('store-ui') {
-                    sh '''
-                        echo "📦 Installing dependencies..."
-                        npm install
-                    '''
-                }
-            }
-        }
-
-        stage('Build') {
-            steps {
-                dir('store-ui') {
-                    sh '''
-                        echo "🏗️ Building the app..."
-                        npm run build
-                    '''
-                }
-            }
-        }
-
-        stage('Test') {
-            steps {
-                dir('store-ui') {
-                    sh '''
-                        echo "🧪 Running tests..."
-                        npm test --passWithNoTests
-                    '''
-                }
-            }
-        }
-
-        stage('Format Check') {
-            steps {
-                dir('store-ui') {
-                    sh '''
-                        echo "🧼 Checking formatting..."
-                        npm run format || echo "Formatting issues found"
-                    '''
-                }
-            }
-        }
+  stages {
+    stage('Checkout SCM') {
+      steps {
+        checkout scm
+      }
     }
 
-    post {
-        success {
-            echo '✅ Build and test passed!'
+    stage('Clean Workspace') {
+      steps {
+        dir('store-ui') {
+          echo '🧹 Cleaning workspace...'
+          sh 'rm -rf node_modules package-lock.json'
         }
-        failure {
-            echo '❌ Build or test failed. Check logs.'
-        }
+      }
     }
+
+    stage('Install Dependencies') {
+      steps {
+        dir('store-ui') {
+          echo '📦 Installing dependencies...'
+          sh 'npm install'
+        }
+      }
+    }
+
+    stage('Build') {
+      steps {
+        dir('store-ui') {
+          echo '🏗️ Building the app...'
+          sh 'npm run build'
+        }
+      }
+    }
+
+    stage('Test') {
+      steps {
+        dir('store-ui') {
+          echo '🧪 Running tests...'
+          sh 'npm test --passWithNoTests'
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo '✅ CI pipeline completed successfully.'
+    }
+    failure {
+      echo '❌ CI pipeline failed. Check the logs for details.'
+    }
+  }
 }
