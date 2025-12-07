@@ -14,7 +14,7 @@ pipeline {
   options {
     timestamps()
     skipStagesAfterUnstable()
-    retry(2) // Retry failed stages up to 2 times
+    retry(2)
   }
 
   stages {
@@ -24,113 +24,81 @@ pipeline {
       }
     }
 
-    stage('Build & Test Microservices') {
-      parallel {
-        stage('cart-cna-microservice') {
-          steps {
-            dir('cart-cna-microservice') {
-              sh 'chmod +x gradlew'
-              sh './gradlew clean test build'
+    stage('Discover Microservices') {
+      steps {
+        script {
+          def services = []
+          def dirs = sh(script: "ls -d */", returnStdout: true).trim().split("\n")
+          for (dir in dirs) {
+            if (fileExists("${dir}package.json") || fileExists("${dir}build.gradle") || fileExists("${dir}requirements.txt")) {
+              services.add(dir.replace("/", ""))
             }
           }
-          post {
-            always {
-              junit 'cart-cna-microservice/build/test-results/test/*.xml'
-            }
-          }
-        }
-
-        stage('products-cna-microservice') {
-          steps {
-            dir('products-cna-microservice') {
-              sh '''
-                if ! npm ci; then
-                  echo "Retrying npm ci..."
-                  npm ci
-                fi
-                npm run lint || echo "Linting issues found"
-                npm run format || echo "Formatting issues found"
-                CI=true npm test -- --passWithNoTests --watchAll=false
-                npm run build
-              '''
-            }
-          }
-          post {
-            always {
-              junit 'products-cna-microservice/reports/junit/*.xml'
-            }
-          }
-        }
-
-        stage('users-cna-microservice') {
-          steps {
-            dir('users-cna-microservice') {
-              sh '''
-                python3 -m venv venv
-                venv/bin/pip install -r requirements.txt
-                venv/bin/pytest --junitxml=report.xml
-              '''
-            }
-          }
-          post {
-            always {
-              junit 'users-cna-microservice/report.xml'
-            }
-          }
-        }
-
-        stage('store-ui') {
-          steps {
-            dir('store-ui') {
-              sh '''
-                if ! npm ci; then
-                  echo "Retrying npm ci..."
-                  npm ci
-                fi
-                npm run lint || echo "Linting issues found"
-                npm run format || echo "Formatting issues found"
-                CI=true npm test -- --passWithNoTests --watchAll=false
-                npm run build
-              '''
-            }
-          }
+          env.SERVICES = services.join(",")
+          echo "Detected microservices: ${env.SERVICES}"
         }
       }
     }
 
-    stage('Docker Build & Security Scan') {
+    stage('Build & Test Microservices') {
       parallel {
-        stage('cart-cna-microservice') {
-          steps {
-            dir('cart-cna-microservice') {
-              sh "docker build -t cart-cna-microservice:${IMAGE_TAG} ."
-              sh "trivy image --exit-code 1 --severity HIGH,CRITICAL cart-cna-microservice:${IMAGE_TAG} || echo 'Vulnerabilities found'"
+        script {
+          def services = env.SERVICES.split(",")
+          def parallelStages = [:]
+
+          for (service in services) {
+            parallelStages[service] = {
+              dir(service) {
+                script {
+                  if (fileExists('build.gradle')) {
+                    sh './gradlew clean test build'
+                    junit 'build/test-results/test/*.xml'
+                  } else if (fileExists('package.json')) {
+                    sh '''#!/bin/bash
+                    if ! npm ci; then
+                      echo "Retrying npm ci..."
+                      npm ci
+                    fi
+                    npm run lint || echo "Lint issues"
+                    npm run format || echo "Format issues"
+                    CI=true npm test -- --passWithNoTests --watchAll=false
+                    npm run build
+                    '''
+                    junit 'reports/junit/*.xml'
+                  } else if (fileExists('requirements.txt')) {
+                    sh '''#!/bin/bash
+                    python3 -m venv venv
+                    venv/bin/pip install -r requirements.txt
+                    venv/bin/pytest --junitxml=report.xml
+                    '''
+                    junit 'report.xml'
+                  }
+                }
+              }
             }
           }
+          parallel parallelStages
         }
-        stage('products-cna-microservice') {
-          steps {
-            dir('products-cna-microservice') {
-              sh "docker build -t products-cna-microservice:${IMAGE_TAG} ."
-              sh "trivy image --exit-code 1 --severity HIGH,CRITICAL products-cna-microservice:${IMAGE_TAG} || echo 'Vulnerabilities found'"
+      }
+    }
+
+    stage('Docker Build & Scan') {
+      parallel {
+        script {
+          def services = env.SERVICES.split(",")
+          def parallelDocker = [:]
+
+          for (service in services) {
+            parallelDocker[service] = {
+              dir(service) {
+                sh """#!/bin/bash
+                  docker build -t ${service}:${env.IMAGE_TAG} .
+                  trivy image --exit-code 1 --severity HIGH,CRITICAL ${service}:${env.IMAGE_TAG} || echo "Vulnerabilities found in ${service}"
+                """
+              }
             }
           }
-        }
-        stage('users-cna-microservice') {
-          steps {
-            dir('users-cna-microservice') {
-              sh "docker build -t users-cna-microservice:${IMAGE_TAG} ."
-              sh "trivy image --exit-code 1 --severity HIGH,CRITICAL users-cna-microservice:${IMAGE_TAG} || echo 'Vulnerabilities found'"
-            }
-          }
-        }
-        stage('store-ui') {
-          steps {
-            dir('store-ui') {
-              sh "docker build -t store-ui:${IMAGE_TAG} ."
-              sh "trivy image --exit-code 1 --severity HIGH,CRITICAL store-ui:${IMAGE_TAG} || echo 'Vulnerabilities found'"
-            }
-          }
+          parallel parallelDocker
         }
       }
     }
@@ -138,14 +106,16 @@ pipeline {
     stage('Push Images to ECR') {
       steps {
         withAWS(credentials: "${AWS_CREDENTIAL_ID}", region: "${AWS_REGION}") {
-          sh """
-            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-
-            for service in cart-cna-microservice products-cna-microservice users-cna-microservice store-ui; do
-              docker tag ${service}:${IMAGE_TAG} ${ECR_REGISTRY}/${service}:${IMAGE_TAG}
-              docker push ${ECR_REGISTRY}/${service}:${IMAGE_TAG}
-            done
-          """
+          script {
+            def services = env.SERVICES.split(",")
+            for (service in services) {
+              sh """#!/bin/bash
+                aws ecr get-login-password --region ${env.AWS_REGION} | docker login --username AWS --password-stdin ${env.ECR_REGISTRY}
+                docker tag ${service}:${env.IMAGE_TAG} ${env.ECR_REGISTRY}/${service}:${env.IMAGE_TAG}
+                docker push ${env.ECR_REGISTRY}/${service}:${env.IMAGE_TAG}
+              """
+            }
+          }
         }
       }
     }
@@ -153,21 +123,26 @@ pipeline {
     stage('GitOps Promotion') {
       steps {
         sshagent([GITOPS_CREDENTIAL]) {
-          sh """
+          sh '''#!/bin/bash
             git clone ${GITOPS_REPO} gitops
             cd gitops
             git checkout ${GITOPS_BRANCH}
-
-            for service in cart-cna-microservice products-cna-microservice users-cna-microservice store-ui; do
-              sed -i 's|image: .*$|image: ${ECR_REGISTRY}/${service}:${IMAGE_TAG}|' ${service}/deployment.yaml
-            done
-
+          '''
+          script {
+            def services = env.SERVICES.split(",")
+            for (service in services) {
+              sh """#!/bin/bash
+                sed -i 's|image: .*\$|image: ${env.ECR_REGISTRY}/${service}:${env.IMAGE_TAG}|' ${service}/deployment.yaml
+              """
+            }
+          }
+          sh '''#!/bin/bash
             git config user.name "Jenkins CI"
             git config user.email "ci@streamlinepay.com"
             git add .
             git commit -am "Promote ${IMAGE_TAG} to ${GITOPS_BRANCH}" || echo "No changes to commit"
             git push origin ${GITOPS_BRANCH}
-          """
+          '''
         }
       }
     }
@@ -178,7 +153,7 @@ pipeline {
       cleanWs()
     }
     success {
-      echo "✅ CI pipeline complete: all images built, scanned, pushed, and GitOps updated."
+      echo "✅ CI pipeline complete: all detected microservices built, tested, dockerized, scanned, pushed, and promoted via GitOps."
     }
     failure {
       echo "❌ CI pipeline failed. Check logs for details."
