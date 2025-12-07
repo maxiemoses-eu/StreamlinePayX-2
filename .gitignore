@@ -17,3 +17,5 @@ build/
 *.tmp
 *.bak
 *.backup
+package.json
+store-ui-backup/
