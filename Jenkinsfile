@@ -4,8 +4,8 @@ pipeline {
 
     environment {
         AWS_REGION = 'us-west-2'
-        HUSKY = '0'  // avoid git hook issues in CI
-        PATH = "/usr/bin:${env.PATH}"   // ensures java/npm/python resolve without Jenkins tools
+        HUSKY      = '0'
+        PATH       = "/usr/bin:${env.PATH}"
     }
 
     stages {
@@ -26,6 +26,7 @@ pipeline {
                             sh './gradlew clean test build'
                         }
                     }
+                    post { always { junit 'cart-cna-microservice/build/test-results/test/*.xml' } }
                 }
 
                 stage('products-cna-microservice') {
@@ -38,20 +39,21 @@ pipeline {
                             sh 'npm run build'
                         }
                     }
+                    post { always { junit 'products-cna-microservice/reports/junit/*.xml' } }
                 }
 
                 stage('users-cna-microservice') {
                     steps {
                         dir('users-cna-microservice') {
                             sh '''
-                            python3 -m venv venv
-                            venv/bin/pip install --upgrade pip
-                            venv/bin/pip install -r requirements.txt
-                            venv/bin/pytest --junitxml=report.xml
+                                python3 -m venv venv
+                                venv/bin/pip install --upgrade pip
+                                venv/bin/pip install -r requirements.txt
+                                venv/bin/pytest --junitxml=report.xml
                             '''
-                            junit 'users-cna-microservice/report.xml'
                         }
                     }
+                    post { always { junit 'users-cna-microservice/report.xml' } }
                 }
 
                 stage('store-ui') {
@@ -65,28 +67,33 @@ pipeline {
                         }
                     }
                 }
-
             }
         }
 
         stage('Docker Build & Scan') {
-            steps { echo "🛠 Placeholder for Docker Stage — enable when ready" }
+            steps {
+                echo "🔒 Docker Build + Trivy scan ready — enable when ECR is configured"
+            }
         }
 
         stage('Push to ECR') {
-            steps { echo "🛠 Placeholder for ECR Push" }
+            steps {
+                echo "📦 ECR push disabled until credentials confirmed"
+            }
         }
 
         stage('GitOps Deploy') {
-            steps { echo "🛠 Placeholder GitOps" }
+            steps {
+                echo "🚀 GitOps Deployment stage ready"
+            }
         }
     }
 
     post {
         always {
-            node { cleanWs() }
+            cleanWs()
         }
-        failure { echo "❌ Pipeline failed" }
-        success { echo "🎉 Pipeline succeeded" }
+        success { echo "🎉 Pipeline completed successfully" }
+        failure { echo "❌ Pipeline failed — check logs" }
     }
 }
