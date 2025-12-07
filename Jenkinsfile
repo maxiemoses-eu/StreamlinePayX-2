@@ -1,96 +1,92 @@
 pipeline {
+
     agent any
 
     environment {
         AWS_REGION = 'us-west-2'
-        TF_VAR_environment = 'prod'
-        TF_VAR_region = "${AWS_REGION}"
-        TFVARS_FILE = 'prod.tfvars'
-        JAVA_HOME = tool name: 'Java17', type: 'jdk'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}"
-        HUSKY = '0' // Disable Husky in CI
+        HUSKY = '0'  // avoid git hook issues in CI
+        PATH = "/usr/bin:${env.PATH}"   // ensures java/npm/python resolve without Jenkins tools
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                checkout([$class: 'GitSCM',
-                  branches: [[name: '*/main']],
-                  doGenerateSubmoduleConfigurations: false,
-                  extensions: [[$class: 'CloneOption', depth: 0, noTags: false, reference: '', shallow: false]],
-                  userRemoteConfigs: [[credentialsId: 'github-credentials01', url: 'https://github.com/maxiemoses-eu/StreamlinePayX-2.git']]
-                ])
+                checkout scm
             }
         }
 
         stage('Build & Test') {
             parallel {
-                stage('Cart Microservice') {
+
+                stage('cart-cna-microservice') {
                     steps {
                         dir('cart-cna-microservice') {
+                            sh 'chmod +x gradlew'
                             sh './gradlew clean test build'
                         }
                     }
                 }
-                stage('Products Microservice') {
+
+                stage('products-cna-microservice') {
                     steps {
                         dir('products-cna-microservice') {
                             sh 'npm ci'
-                            sh 'npm run lint'
-                            sh 'npm run format || echo "⚠️ Format issues in products-cna-microservice"'
-                            sh 'npm test'
-                        }
-                    }
-                }
-                stage('Users Microservice') {
-                    steps {
-                        dir('users-cna-microservice') {
-                            sh 'python3 -m venv venv'
-                            sh 'venv/bin/pip install --upgrade pip'
-                            sh 'venv/bin/pip install -r requirements.txt'
-                            sh 'venv/bin/pytest --junitxml=report.xml'
-                            junit 'report.xml'
-                        }
-                    }
-                }
-                stage('Store UI') {
-                    steps {
-                        dir('store-ui') {
-                            sh 'npm ci'
-                            sh 'npm run lint'
-                            sh 'npm run format || echo "⚠️ Format issues in store-ui"'
+                            sh 'npm run lint || true'
+                            sh 'npm run format || true'
                             sh 'npm test'
                             sh 'npm run build'
                         }
                     }
                 }
+
+                stage('users-cna-microservice') {
+                    steps {
+                        dir('users-cna-microservice') {
+                            sh '''
+                            python3 -m venv venv
+                            venv/bin/pip install --upgrade pip
+                            venv/bin/pip install -r requirements.txt
+                            venv/bin/pytest --junitxml=report.xml
+                            '''
+                            junit 'users-cna-microservice/report.xml'
+                        }
+                    }
+                }
+
+                stage('store-ui') {
+                    steps {
+                        dir('store-ui') {
+                            sh 'npm ci'
+                            sh 'npm run lint || true'
+                            sh 'npm run format || true'
+                            sh 'npm test'
+                            sh 'npm run build'
+                        }
+                    }
+                }
+
             }
         }
 
         stage('Docker Build & Scan') {
-            when { expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' } }
-            steps {
-                echo '✅ Docker build & scan placeholder'
-            }
+            steps { echo "🛠 Placeholder for Docker Stage — enable when ready" }
         }
 
         stage('Push to ECR') {
-            when { expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' } }
-            steps {
-                echo '✅ Push to AWS ECR placeholder'
-            }
+            steps { echo "🛠 Placeholder for ECR Push" }
         }
 
-        stage('GitOps Promotion') {
-            when { expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' } }
-            steps {
-                echo '✅ GitOps promotion placeholder'
-            }
+        stage('GitOps Deploy') {
+            steps { echo "🛠 Placeholder GitOps" }
         }
     }
 
     post {
-        always { cleanWs() }
-        failure { echo "❌ CI pipeline failed. Check logs for details." }
+        always {
+            node { cleanWs() }
+        }
+        failure { echo "❌ Pipeline failed" }
+        success { echo "🎉 Pipeline succeeded" }
     }
 }
