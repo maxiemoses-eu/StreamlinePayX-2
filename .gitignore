@@ -1,2 +1,19 @@
-.vscode
+# IDE settings
+.vscode/
+
+# macOS system files
 .DS_Store
+
+# Global ignores
+node_modules/
+.env
+package-lock.json
+coverage/
+dist/
+build/
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+*.backup
